@@ -32,6 +32,7 @@ require('gpt').stream("What is the meaning of life?", {
 ```
 ]]
 --
+
 M.stream = function(prompt_or_messages, opts)
 	if vim.g.gpt_api_key == nil then
 		print("Please provide an OpenAI API key require('gpt').setup({})")
@@ -43,7 +44,7 @@ M.stream = function(prompt_or_messages, opts)
 		messages = { { role = "user", content = prompt_or_messages } }
 	end
 
-	local model = opts.model or "gpt-4"
+	local model = opts.model or "gpt-3.5-turbo"
 
 	local payload = {
 		stream = true,
