@@ -32,7 +32,6 @@ require('gpt').stream("What is the meaning of life?", {
 ```
 ]]
 --
-
 M.stream = function(prompt_or_messages, opts)
 	if vim.g.gpt_api_key == nil then
 		print("Please provide an OpenAI API key require('gpt').setup({})")
@@ -98,17 +97,19 @@ M.stream = function(prompt_or_messages, opts)
 					if line == "" then
 						break
 					end
-					local json = vim.fn.json_decode(line) or {}
-					local chunk = json.choices[1].delta.content
+					if (not string.match(line, '%[DONE%]')) then
+						local json = vim.fn.json_decode(line) or {}
+						local chunk = json.choices[1].delta.content
 
-					if chunk ~= nil then
-						if trim_leading then
-							chunk = chunk:gsub("^%s+", "")
-							if chunk ~= "" then
-								trim_leading = false
+						if chunk ~= nil then
+							if trim_leading then
+								chunk = chunk:gsub("^%s+", "")
+								if chunk ~= "" then
+									trim_leading = false
+								end
 							end
+							cb(chunk)
 						end
-						cb(chunk)
 					end
 				end
 			end
@@ -140,6 +141,7 @@ local function create_response_writer(opts)
 	return function(chunk)
 		-- Delete the currently written response
 		local num_lines = #(vim.split(response, "\n", {}))
+		vim.cmd('undojoin')
 		vim.api.nvim_buf_set_lines(
 			bufnr, line_start, line_start + num_lines,
 			false, {}
@@ -150,12 +152,11 @@ local function create_response_writer(opts)
 
 		-- Write out the latest
 		response = response .. chunk
+		vim.cmd('undojoin')
 		vim.api.nvim_buf_set_lines(
 			bufnr, line_start, line_start,
 			false, vim.split(response, "\n", {})
 		)
-
-		vim.cmd('undojoin')
 	end
 end
 
@@ -164,7 +165,6 @@ In visual mode given some selected text, ask the user how they
 would like it to be rewritten. Then rewrite it that way.
 ]]
 --
-
 M.replace = function()
 	local mode = vim.api.nvim_get_mode().mode
 	if mode ~= "v" and mode ~= "V" then
@@ -188,8 +188,8 @@ M.replace = function()
 		trim_leading = true,
 		on_chunk = function(chunk)
 			chunk = vim.split(chunk, "\n", {})
-			vim.api.nvim_put(chunk, "c", mode == 'V', true)
 			vim.cmd('undojoin')
+			vim.api.nvim_put(chunk, "c", mode == 'V', true)
 		end
 	})
 end
