@@ -39,9 +39,11 @@ M.stream = function(prompt_or_messages, opts)
 		return
 	end
 
-	local messages = prompt_or_messages
+	local messages
 	if type(prompt_or_messages) == "string" then
 		messages = { { role = "user", content = prompt_or_messages } }
+	else
+		messages = prompt_or_messages
 	end
 
 	local model = opts.model or "gpt-3.5-turbo"
@@ -96,7 +98,7 @@ M.stream = function(prompt_or_messages, opts)
 					if line == "" then
 						break
 					end
-					local json = vim.fn.json_decode(line)
+					local json = vim.fn.json_decode(line) or {}
 					local chunk = json.choices[1].delta.content
 
 					if chunk ~= nil then
@@ -128,27 +130,28 @@ local function send_keys(keys)
 end
 
 local function create_response_writer(opts)
+	opts = opts or {}
 	local line_start = opts.line_no or vim.fn.line(".")
-	local bufnum = vim.api.nvim_get_current_buf()
+	local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
 	local nsnum = vim.api.nvim_create_namespace("gpt")
-	local extmarkid = vim.api.nvim_buf_set_extmark(bufnum, nsnum, line_start, 0, {})
+	local extmarkid = vim.api.nvim_buf_set_extmark(bufnr, nsnum, line_start, 0, {})
 
 	local response = ""
 	return function(chunk)
 		-- Delete the currently written response
 		local num_lines = #(vim.split(response, "\n", {}))
 		vim.api.nvim_buf_set_lines(
-			bufnum, line_start, line_start + num_lines,
+			bufnr, line_start, line_start + num_lines,
 			false, {}
 		)
 
 		-- Update the line start to wherever the extmark is now
-		line_start = vim.api.nvim_buf_get_extmark_by_id(bufnum, nsnum, extmarkid, {})[1]
+		line_start = vim.api.nvim_buf_get_extmark_by_id(bufnr, nsnum, extmarkid, {})[1]
 
 		-- Write out the latest
 		response = response .. chunk
 		vim.api.nvim_buf_set_lines(
-			bufnum, line_start, line_start,
+			bufnr, line_start, line_start,
 			false, vim.split(response, "\n", {})
 		)
 
