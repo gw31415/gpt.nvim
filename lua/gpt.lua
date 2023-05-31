@@ -159,6 +159,7 @@ local function create_response_writer(opts)
 		)
 	end
 end
+M.__create_response_writer = create_response_writer
 
 --[[
 In visual mode given some selected text, ask the user how they
