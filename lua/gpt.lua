@@ -9,7 +9,7 @@ M.setup = function(opts)
 	end
 
 	-- Make sure the share directory exists
-	local share_dir = os.getenv("HOME") .. "/.local/share/nvim"
+	local share_dir = vim.fn.stdpath 'data'
 	if vim.fn.isdirectory(share_dir) == 0 then
 		vim.fn.mkdir(share_dir, "p")
 	end
@@ -68,7 +68,7 @@ M.stream = function(prompt_or_messages, opts)
 	local encoded_payload = vim.fn.json_encode(payload)
 
 	-- Write payload to temp file
-	local params_path = os.getenv("HOME") .. "/.local/share/nvim/gpt.query.json"
+	local params_path = vim.fn.stdpath 'data' .. "/gpt.query.json"
 	local temp = io.open(params_path, "w")
 	if temp ~= nil then
 		temp:write(encoded_payload)
@@ -81,7 +81,7 @@ M.stream = function(prompt_or_messages, opts)
 		"-d @" .. params_path .. " | tee ~/.local/share/nvim/gpt.log 2>/dev/null"
 
 	-- Write command to log file
-	local log = io.open(os.getenv("HOME") .. "/.local/share/nvim/gpt.log", "w")
+	local log = io.open(vim.fn.stdpath 'data' .. "/gpt.log", "w")
 	if log ~= nil then
 		log:write(command)
 		log:close()
