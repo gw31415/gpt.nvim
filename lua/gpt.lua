@@ -277,6 +277,8 @@ M.order = function(opts)
 	vim.api.nvim_buf_set_option(bufnr, 'bufhidden', 'hide')
 	---@diagnostic disable-next-line: redundant-parameter
 	vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
 
 
 	-- 現在のウィンドウとバッファを保存
@@ -295,11 +297,18 @@ M.order = function(opts)
 	-- 元のバッファに戻る
 	vim.api.nvim_win_set_buf(current_win, current_buf)
 
+	local writer = create_response_writer {
+		line_no = 0,
+		bufnr = bufnr
+	}
 	require 'gpt'.stream(messages, {
-		on_chunk = create_response_writer {
-			line_no = 0,
-			bufnr = bufnr
-		}
+		on_chunk = function(chunk)
+			---@diagnostic disable-next-line: redundant-parameter
+			vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
+			writer(chunk)
+			---@diagnostic disable-next-line: redundant-parameter
+			vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
+		end,
 	})
 end
 
