@@ -6,6 +6,9 @@ local api_key = nil
 -- jobid
 local jobid = nil
 
+-- Model version
+local model
+
 -- opts of vim.notify
 local notify_opts = {
 	title = 'gpt.nvim'
@@ -64,6 +67,7 @@ M.setup = function(opts)
 		vim.notify("Please provide an OpenAI API key or its setup function.", vim.log.levels.WARN, notify_opts)
 		return
 	end
+	model = opts.model or "gpt-3.5-turbo"
 
 	-- Make sure the share directory exists to log
 	local share_dir = vim.fn.stdpath 'data'
@@ -115,7 +119,6 @@ M.stream = function(prompt_or_messages, opts)
 
 	-- Setup options
 	opts = opts or {}
-	local model = opts.model or "gpt-3.5-turbo"
 
 	-- Write payload to temp file
 	local params_path = vim.fn.stdpath 'data' .. "/gpt.query.json"
