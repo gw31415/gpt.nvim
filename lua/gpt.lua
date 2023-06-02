@@ -1,121 +1,15 @@
 local M = {}
 
--- Setup API key
-M.setup = function(opts)
-	local api_key = opts.api_key
-	if api_key == nil then
-		print("Please provide an OpenAI API key")
-		return
-	end
+-- OpenAI API key
+local api_key = nil
 
-	-- Make sure the share directory exists
-	local share_dir = vim.fn.stdpath 'data'
-	if vim.fn.isdirectory(share_dir) == 0 then
-		vim.fn.mkdir(share_dir, "p")
-	end
+-- jobid
+local jobid = nil
 
-	-- Setup API key
-	vim.g.gpt_api_key = api_key
-end
-
---[[
-Given a prompt, call chatGPT and stream back the results one chunk
-as a time as they are streamed back from OpenAI.
-
-```
-require('gpt').stream("What is the meaning of life?", {
-	trim_leading = true, -- Trim leading whitespace of the response
-	on_chunk = function(chunk)
-		print(chunk)
-	end
-})
-```
-]]
---
-M.stream = function(prompt_or_messages, opts)
-	if vim.g.gpt_api_key == nil then
-		print("Please provide an OpenAI API key require('gpt').setup({})")
-		return
-	end
-
-	local messages
-	if type(prompt_or_messages) == "string" then
-		messages = { { role = "user", content = prompt_or_messages } }
-	else
-		messages = prompt_or_messages
-	end
-
-	local model = opts.model or "gpt-3.5-turbo"
-
-	local payload = {
-		stream = true,
-		model = model,
-		messages = messages,
-	}
-
-	local identity1 = function(chunk)
-		return chunk
-	end
-
-	local identity = function()
-	end
-
-	opts = opts or {}
-	local cb = opts.on_chunk or identity1
-	local on_exit = opts.on_exit or identity
-	local trim_leading = opts.trim_leading or true
-	local encoded_payload = vim.fn.json_encode(payload)
-
-	-- Write payload to temp file
-	local params_path = vim.fn.stdpath 'data' .. "/gpt.query.json"
-	local temp = io.open(params_path, "w")
-	if temp ~= nil then
-		temp:write(encoded_payload)
-		temp:close()
-	end
-
-	local command =
-		"curl --no-buffer https://api.openai.com/v1/chat/completions " ..
-		"-H 'Content-Type: application/json' -H 'Authorization: Bearer " .. vim.g.gpt_api_key .. "' " ..
-		"-d @" .. params_path .. " | tee ~/.local/share/nvim/gpt.log 2>/dev/null"
-
-	-- Write command to log file
-	local log = io.open(vim.fn.stdpath 'data' .. "/gpt.log", "w")
-	if log ~= nil then
-		log:write(command)
-		log:close()
-	end
-
-	vim.g.gpt_jobid = vim.fn.jobstart(command, {
-		stdout_buffered = false,
-		on_exit = on_exit,
-		on_stdout = function(_, data, _)
-			for _, line in ipairs(data) do
-				if line ~= "" then
-					-- Strip token to get down to the JSON
-					line = line:gsub("^data: ", "")
-					if line == "" then
-						break
-					end
-					if (not string.match(line, '%[DONE%]')) then
-						local json = vim.fn.json_decode(line) or {}
-						local chunk = json.choices[1].delta.content
-
-						if chunk ~= nil then
-							if trim_leading then
-								chunk = chunk:gsub("^%s+", "")
-								if chunk ~= "" then
-									trim_leading = false
-								end
-							end
-							cb(chunk)
-						end
-					end
-				end
-			end
-		end,
-	})
-end
+-- opts of vim.notify
+local notify_opts = {
+	title = 'gpt.nvim'
+}
 
 local function get_visual_selection()
 	vim.cmd('noau normal! "vy"')
@@ -161,6 +55,134 @@ local function create_response_writer(opts)
 end
 M.__create_response_writer = create_response_writer
 
+-- Setup API key
+M.setup = function(opts)
+	local key = opts.api_key
+	if type(key) == "string" or type(key) == "function" then
+		api_key = key
+	else
+		vim.notify("Please provide an OpenAI API key or its setup function.", vim.log.levels.WARN, notify_opts)
+		return
+	end
+
+	-- Make sure the share directory exists to log
+	local share_dir = vim.fn.stdpath 'data'
+	if vim.fn.isdirectory(share_dir) == 0 then
+		vim.fn.mkdir(share_dir, "p")
+	end
+end
+
+--[[
+Given a prompt, call chatGPT and stream back the results one chunk
+as a time as they are streamed back from OpenAI.
+
+```
+require('gpt').stream("What is the meaning of life?", {
+	trim_leading = true, -- Trim leading whitespace of the response
+	on_chunk = function(chunk)
+		print(chunk)
+	end
+})
+```
+]]
+--
+M.stream = function(prompt_or_messages, opts)
+	-- Setup api_key
+	if not api_key then
+		print("Please provide an OpenAI API key.")
+		return
+	elseif type(api_key) == "function" then
+		api_key = api_key()
+	end
+	if type(api_key) ~= "string" then
+		vim.notify("OpenAI API key is broken.", vim.log.levels.ERROR, notify_opts)
+		return
+	end
+
+	-- Only one job can be running
+	if jobid then
+		vim.notify("There is a GPT job already running. Only one job can be running at a time.", vim.log.levels.ERROR,
+			notify_opts)
+		return
+	end
+
+	-- Setup messages
+	local messages
+	if type(prompt_or_messages) == "string" then
+		messages = { { role = "user", content = prompt_or_messages } }
+	else
+		messages = prompt_or_messages
+	end
+
+	-- Setup options
+	opts = opts or {}
+	local model = opts.model or "gpt-3.5-turbo"
+	local trim_leading = opts.trim_leading or true
+
+	-- Write payload to temp file
+	local params_path = vim.fn.stdpath 'data' .. "/gpt.query.json"
+	local temp = io.open(params_path, "w")
+	if temp ~= nil then
+		temp:write(vim.fn.json_encode({
+			stream = true,
+			model = model,
+			messages = messages,
+		}))
+		temp:close()
+	end
+
+	local command =
+		"curl --no-buffer https://api.openai.com/v1/chat/completions " ..
+		"-H 'Content-Type: application/json' -H 'Authorization: Bearer " .. api_key .. "' " ..
+		"-d @" .. params_path .. " | tee ~/.local/share/nvim/gpt.log 2>/dev/null"
+
+	-- Write command to log file
+	local log = io.open(vim.fn.stdpath 'data' .. "/gpt.log", "w")
+	if log ~= nil then
+		log:write(command)
+		log:close()
+	end
+
+	local cb = opts.on_chunk
+	local on_exit = opts.on_exit
+	jobid = vim.fn.jobstart(command, {
+		stdout_buffered = false,
+		on_exit = function()
+			if on_exit then
+				on_exit()
+			end
+			jobid = nil
+		end,
+		on_stdout = function(_, data, _)
+			for _, line in ipairs(data) do
+				if line ~= "" then
+					-- Strip token to get down to the JSON
+					line = line:gsub("^data: ", "")
+					if line == "" then
+						break
+					end
+					if (not string.match(line, '%[DONE%]')) then
+						local json = vim.fn.json_decode(line) or {}
+						local chunk = json.choices[1].delta.content
+
+						if chunk ~= nil then
+							if trim_leading then
+								chunk = chunk:gsub("^%s+", "")
+								if chunk ~= "" then
+									trim_leading = false
+								end
+							end
+							if cb then
+								cb(chunk)
+							end
+						end
+					end
+				end
+			end
+		end,
+	})
+end
+
 --[[
 In visual mode given some selected text, ask the user how they
 would like it to be rewritten. Then rewrite it that way.
@@ -189,7 +211,7 @@ M.replace = function()
 		trim_leading = true,
 		on_chunk = function(chunk)
 			chunk = vim.split(chunk, "\n", {})
-			vim.cmd('undojoin')
+			vim.cmd 'undojoin'
 			vim.api.nvim_put(chunk, "c", mode == 'V', true)
 		end
 	})
@@ -253,8 +275,13 @@ M.visual_prompt = function()
 	send_keys("<esc>")
 end
 
+--[[
+Interrupt ChatGPT job.
+]]
+--
 M.cancel = function()
-	vim.fn.jobstop(vim.g.gpt_jobid)
+	vim.fn.jobstop(jobid)
+	jobid = nil
 end
 
 return M
