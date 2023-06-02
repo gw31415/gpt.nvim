@@ -161,7 +161,7 @@ M.stream = function(prompt_or_messages, opts)
 					if line == "" then
 						break
 					end
-					if (not string.match(line, '%[DONE%]')) then
+					if not string.match(line, '%[DONE%]') then
 						local json = vim.fn.json_decode(line) or {}
 						local chunk = json.choices[1].delta.content
 
@@ -296,7 +296,6 @@ M.order = function(opts)
 	vim.api.nvim_win_set_buf(current_win, current_buf)
 
 	require 'gpt'.stream(messages, {
-		trim_leading = true,
 		on_chunk = create_response_writer {
 			line_no = 0,
 			bufnr = bufnr
@@ -310,12 +309,8 @@ is currently positioned.
 ]]
 --
 M.prompt = function()
-	local input = vim.fn.input({
-		prompt = "[Prompt]: ",
-		cancelreturn = "__CANCEL__"
-	})
-
-	if input == "__CANCEL__" then
+	local input = vim.fn.input("[Prompt]: ")
+	if input == "" then
 		return
 	end
 
@@ -335,12 +330,9 @@ M.visual_prompt = function()
 	local text = get_visual_selection()
 
 	local prompt = ""
-	local input = vim.fn.input({
-		prompt = "[Prompt]: " .. prompt,
-		cancelreturn = "__CANCEL__"
-	})
+	local input = vim.fn.input("[Prompt]: " .. prompt)
 
-	if input == "__CANCEL__" then
+	if input == "" then
 		return
 	end
 
@@ -365,8 +357,9 @@ Interrupt ChatGPT job.
 ]]
 --
 M.cancel = function()
-	vim.fn.jobstop(jobid)
-	jobid = nil
+	if jobid then
+		vim.fn.jobstop(jobid)
+	end
 end
 
 return M
