@@ -211,6 +211,100 @@ M.replace = function()
 	})
 end
 
+local gpt_ordering_buffer = nil
+--[[
+An assistant function that accepts commands and returns source code for the file type currently being edited.
+Creates a window to display the source code according to the Vim commands in opts.opener.
+]]
+--
+M.order = function(opts)
+	opts = opts or {}
+	local opener = opts.opener or 'rightbelow 40vsplit'
+
+	if gpt_ordering_buffer then
+		if jobid then
+			require 'gpt'.cancel()
+			return
+		end
+		vim.api.nvim_buf_delete(gpt_ordering_buffer, {})
+		gpt_ordering_buffer = nil
+		return
+	end
+	---@diagnostic disable-next-line: redundant-parameter
+	local filetype = vim.api.nvim_buf_get_option(0, 'filetype')
+
+	local function create_prompt(ft)
+		---@diagnostic disable-next-line: redundant-parameter
+		local commentstring = string.format(vim.api.nvim_buf_get_option(0, 'commentstring'),
+			' Written by ' .. model)
+		local source_name
+		if ft == 'lua' then
+			source_name = 'Lua'
+		elseif ft == 'rust' then
+			source_name = 'Rust'
+		elseif ft == 'c' then
+			source_name = 'C'
+		elseif ft == 'python' then
+			source_name = 'Python3'
+		else
+			return nil
+		end
+		return string.format(
+			"You are an excellent coding helper, returning %s source code that satisfies the user's input. The response is ONLY simplest source code. Your output is NOT markdown, BUT an executable source code. ALL explanations other than the excutable source code must be written in comments.\nThe first line is always a %s comment:\n%s",
+			source_name, source_name, commentstring)
+	end
+
+	local system_prompt_str = create_prompt(filetype)
+	if not system_prompt_str then
+		vim.notify('This filetype is not supported.', vim.log.levels.INFO, notify_opts)
+		return
+	end
+	-- 命令の入力
+	local ok, order = pcall(vim.fn.input, 'Order: ')
+	if not ok or order == '' then
+		return
+	end
+	local messages = {
+		{ role = 'system', content = system_prompt_str },
+		{ role = 'user',   content = order .. "\n\nCode:" },
+	}
+	local bufnr = vim.api.nvim_create_buf(false, true)
+	gpt_ordering_buffer = bufnr
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_buf_set_option(bufnr, 'filetype', filetype)
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_buf_set_option(bufnr, "bt", "nofile")
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_buf_set_option(bufnr, 'bufhidden', 'hide')
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
+
+
+	-- 現在のウィンドウとバッファを保存
+	local current_win = vim.api.nvim_get_current_win()
+	local current_buf = vim.api.nvim_get_current_buf()
+	-- vsplitを開く
+	vim.api.nvim_command(opener)
+	-- 新しいウィンドウを取得
+	local new_win = vim.api.nvim_get_current_win()
+	-- 新しいウィンドウにバッファを設定
+	vim.api.nvim_win_set_buf(new_win, bufnr)
+	-- ステータスライン
+	vim.cmd "setl stl=Result"
+	-- 元のウィンドウに戻る
+	vim.api.nvim_set_current_win(current_win)
+	-- 元のバッファに戻る
+	vim.api.nvim_win_set_buf(current_win, current_buf)
+
+	require 'gpt'.stream(messages, {
+		trim_leading = true,
+		on_chunk = require 'gpt'.__create_response_writer {
+			line_no = 0,
+			bufnr = bufnr
+		}
+	})
+end
+
 --[[
 Ask the user for a prompt and insert the response where the cursor
 is currently positioned.
