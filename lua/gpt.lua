@@ -30,6 +30,7 @@ end
 local function create_response_writer(opts)
 	-- Setup options
 	opts = opts or {}
+	local scroll_win = opts.scroll_win
 	local line_start = opts.line_no or vim.fn.line(".")
 	local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
 	local nsnum = vim.api.nvim_create_namespace("gpt")
@@ -51,6 +52,11 @@ local function create_response_writer(opts)
 		local lines = vim.split(response, "\n", {})
 		vim.cmd 'undojoin'
 		vim.api.nvim_buf_set_lines(bufnr, line_start, line_start, false, lines)
+
+		-- Scroll
+		if scroll_win and #lines > 1 then
+			vim.api.nvim_win_call(scroll_win, function() vim.cmd "norm! zb" end)
+		end
 	end
 end
 
@@ -297,7 +303,8 @@ M.order = function(opts)
 
 	local writer = create_response_writer {
 		line_no = 0,
-		bufnr = bufnr
+		bufnr = bufnr,
+		scroll_win = (opts.scroll == nil or opts.scroll) and new_win or nil,
 	}
 	require 'gpt'.stream(messages, {
 		on_chunk = function(chunk)
