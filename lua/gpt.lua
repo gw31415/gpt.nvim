@@ -291,7 +291,8 @@ M.order = function(opts)
 	-- 新しいウィンドウにバッファを設定
 	vim.api.nvim_win_set_buf(new_win, bufnr)
 	-- ステータスライン
-	vim.cmd "setl stl=Result"
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_win_set_option(new_win, "stl", "order-result")
 	-- 元のウィンドウに戻る
 	vim.api.nvim_set_current_win(current_win)
 	-- 元のバッファに戻る
