@@ -56,7 +56,6 @@ local function create_response_writer(opts)
 		)
 	end
 end
-M.__create_response_writer = create_response_writer
 
 -- Setup API key
 M.setup = function(opts)
@@ -298,7 +297,7 @@ M.order = function(opts)
 
 	require 'gpt'.stream(messages, {
 		trim_leading = true,
-		on_chunk = require 'gpt'.__create_response_writer {
+		on_chunk = create_response_writer {
 			line_no = 0,
 			bufnr = bufnr
 		}
