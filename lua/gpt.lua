@@ -310,6 +310,9 @@ M.order = function(opts)
 			---@diagnostic disable-next-line: redundant-parameter
 			vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
 		end,
+		on_exit = function()
+			vim.notify("Order fulfillment is complete.", vim.log.levels.INFO, notify_opts)
+		end,
 	})
 end
 
