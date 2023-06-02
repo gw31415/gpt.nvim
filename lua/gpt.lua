@@ -222,6 +222,7 @@ Creates a window to display the source code according to the Vim commands in opt
 M.order = function(opts)
 	opts = opts or {}
 	local opener = opts.opener or 'rightbelow 40vsplit'
+	local setup_window = opts.setup_window
 
 	if gpt_ordering_buffer then
 		if jobid then
@@ -293,9 +294,8 @@ M.order = function(opts)
 	local new_win = vim.api.nvim_get_current_win()
 	-- 新しいウィンドウにバッファを設定
 	vim.api.nvim_win_set_buf(new_win, bufnr)
-	-- ステータスライン
-	---@diagnostic disable-next-line: redundant-parameter
-	vim.api.nvim_win_set_option(new_win, "stl", "order-result")
+	-- ウィンドウの設定
+	if setup_window then setup_window() end
 	-- 元のウィンドウに戻る
 	vim.api.nvim_set_current_win(current_win)
 	-- 元のバッファに戻る
