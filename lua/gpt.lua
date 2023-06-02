@@ -78,7 +78,6 @@ as a time as they are streamed back from OpenAI.
 
 ```
 require('gpt').stream("What is the meaning of life?", {
-	trim_leading = true, -- Trim leading whitespace of the response
 	on_chunk = function(chunk)
 		print(chunk)
 	end
@@ -117,7 +116,6 @@ M.stream = function(prompt_or_messages, opts)
 	-- Setup options
 	opts = opts or {}
 	local model = opts.model or "gpt-3.5-turbo"
-	local trim_leading = opts.trim_leading or true
 
 	-- Write payload to temp file
 	local params_path = vim.fn.stdpath 'data' .. "/gpt.query.json"
@@ -166,12 +164,6 @@ M.stream = function(prompt_or_messages, opts)
 						local chunk = json.choices[1].delta.content
 
 						if chunk ~= nil then
-							if trim_leading then
-								chunk = chunk:gsub("^%s+", "")
-								if chunk ~= "" then
-									trim_leading = false
-								end
-							end
 							if cb then
 								cb(chunk)
 							end
@@ -208,7 +200,6 @@ M.replace = function()
 	end
 
 	M.stream(prompt, {
-		trim_leading = true,
 		on_chunk = function(chunk)
 			chunk = vim.split(chunk, "\n", {})
 			vim.cmd 'undojoin'
@@ -234,7 +225,6 @@ M.prompt = function()
 
 	send_keys("<esc>")
 	M.stream(input, {
-		trim_leading = true,
 		on_chunk = create_response_writer()
 	})
 end
@@ -268,7 +258,6 @@ M.visual_prompt = function()
 	end
 
 	M.stream(prompt, {
-		trim_leading = true,
 		on_chunk = create_response_writer()
 	})
 
