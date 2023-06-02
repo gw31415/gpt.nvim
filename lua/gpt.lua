@@ -55,7 +55,7 @@ local function create_response_writer(opts)
 
 		-- Scroll
 		if scroll_win and #lines > 1 then
-			vim.api.nvim_win_call(scroll_win, function() vim.cmd "norm! zb" end)
+			vim.api.nvim_win_call(scroll_win, function() vim.cmd "noau norm! zb" end)
 		end
 	end
 end
