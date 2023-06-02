@@ -127,7 +127,7 @@ M.stream = function(prompt_or_messages, opts)
 	-- Write payload to temp file
 	local params_path = vim.fn.stdpath 'data' .. "/gpt.query.json"
 	local temp = io.open(params_path, "w")
-	if temp ~= nil then
+	if temp then
 		temp:write(vim.fn.json_encode({
 			stream = true,
 			model = model,
@@ -143,7 +143,7 @@ M.stream = function(prompt_or_messages, opts)
 
 	-- Write command to log file
 	local log = io.open(vim.fn.stdpath 'data' .. "/gpt.log", "w")
-	if log ~= nil then
+	if log then
 		log:write(command)
 		log:close()
 	end
@@ -327,9 +327,7 @@ is currently positioned.
 --
 M.prompt = function()
 	local input = vim.fn.input("[Prompt]: ")
-	if input == "" then
-		return
-	end
+	if input == "" then return end
 
 	send_keys("<esc>")
 	M.stream(input, {
@@ -349,18 +347,14 @@ M.visual_prompt = function()
 	local prompt = ""
 	local input = vim.fn.input("[Prompt]: " .. prompt)
 
-	if input == "" then
-		return
-	end
+	if input == "" then return end
 
 	prompt = prompt .. input
 	prompt = prompt .. "\n\n ===== \n\n" .. text .. "\n\n ===== \n\n"
 
 	send_keys("<esc>")
 
-	if mode == 'V' then
-		send_keys("o<CR><esc>")
-	end
+	if mode == 'V' then send_keys("o<CR><esc>") end
 
 	M.stream(prompt, {
 		on_chunk = create_response_writer()
@@ -374,9 +368,7 @@ Interrupt ChatGPT job.
 ]]
 --
 M.cancel = function()
-	if jobid then
-		vim.fn.jobstop(jobid)
-	end
+	if jobid then vim.fn.jobstop(jobid) end
 end
 
 return M
