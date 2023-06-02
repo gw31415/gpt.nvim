@@ -28,37 +28,35 @@ local function send_keys(keys)
 end
 
 local function create_response_writer(opts)
+	-- Setup options
 	opts = opts or {}
 	local line_start = opts.line_no or vim.fn.line(".")
 	local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
 	local nsnum = vim.api.nvim_create_namespace("gpt")
 	local extmarkid = vim.api.nvim_buf_set_extmark(bufnr, nsnum, line_start, 0, {})
 
+	-- Store entire response
 	local response = ""
 	return function(chunk)
 		-- Delete the currently written response
 		local num_lines = #(vim.split(response, "\n", {}))
-		vim.cmd('undojoin')
-		vim.api.nvim_buf_set_lines(
-			bufnr, line_start, line_start + num_lines,
-			false, {}
-		)
+		vim.cmd 'undojoin'
+		vim.api.nvim_buf_set_lines(bufnr, line_start, line_start + num_lines, false, {})
 
 		-- Update the line start to wherever the extmark is now
 		line_start = vim.api.nvim_buf_get_extmark_by_id(bufnr, nsnum, extmarkid, {})[1]
 
 		-- Write out the latest
 		response = response .. chunk
-		vim.cmd('undojoin')
-		vim.api.nvim_buf_set_lines(
-			bufnr, line_start, line_start,
-			false, vim.split(response, "\n", {})
-		)
+		local lines = vim.split(response, "\n", {})
+		vim.cmd 'undojoin'
+		vim.api.nvim_buf_set_lines(bufnr, line_start, line_start, false, lines)
 	end
 end
 
 -- Setup API key
 M.setup = function(opts)
+	-- Setup options
 	local key = opts.api_key
 	if type(key) == "string" or type(key) == "function" then
 		api_key = key
@@ -78,6 +76,7 @@ end
 --[[
 Given a prompt, call chatGPT and stream back the results one chunk
 as a time as they are streamed back from OpenAI.
+@params opts.scroll_win win_id of the window if scroll
 
 ```
 require('gpt').stream("What is the meaning of life?", {
@@ -165,10 +164,8 @@ M.stream = function(prompt_or_messages, opts)
 						local json = vim.fn.json_decode(line) or {}
 						local chunk = json.choices[1].delta.content
 
-						if chunk ~= nil then
-							if cb then
-								cb(chunk)
-							end
+						if chunk and cb then
+							cb(chunk)
 						end
 					end
 				end
