@@ -14,12 +14,6 @@ local notify_opts = {
 	title = 'gpt.nvim'
 }
 
-local function get_visual_selection()
-	vim.cmd('noau normal! "vy"')
-	vim.cmd('noau normal! gv')
-	return vim.fn.getreg('v')
-end
-
 local function send_keys(keys)
 	vim.api.nvim_feedkeys(
 		vim.api.nvim_replace_termcodes(keys, true, false, true),
@@ -27,21 +21,38 @@ local function send_keys(keys)
 	)
 end
 
+-- Create a response_writer for the current buffer window
 local function create_response_writer(opts)
 	-- Setup options
-	opts = opts or {}
-	local scroll_win = opts.scroll_win
-	local line_start = opts.line_no or vim.fn.line(".")
-	local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
-	local nsnum = vim.api.nvim_create_namespace("gpt")
-	local extmarkid = vim.api.nvim_buf_set_extmark(bufnr, nsnum, line_start, 0, {})
+	opts                  = opts or {}
+	local winnr           = vim.api.nvim_get_current_win()
+	local bufnr           = vim.api.nvim_get_current_buf()
+	local _, lnum, col, _ = unpack(vim.fn.getcharpos('.'))
+	-- zero-indexed lnum
+	local line_start      = lnum - 1
+	local do_scroll       = opts.scroll
 
-	-- Store entire response
-	local response = ""
+	local nsnum           = vim.api.nvim_create_namespace("gpt")
+	local extmarkid       = vim.api.nvim_buf_set_extmark(bufnr, nsnum, line_start, 0, {})
+
+	local first_line      = vim.api.nvim_buf_get_lines(bufnr, line_start, line_start + 1, true)[1]
+	-- string found to the left of the cursor
+	local left_hand_side  = first_line:sub(1, col - 1)
+	-- string found to the right of the cursor
+	local right_hand_side = first_line:sub(col)
+
+	vim.api.nvim_buf_set_lines(bufnr, line_start, line_start, true, {})
+
+	-- Store entire response: initial value is the string that was initially to the right of the cursor
+	local response = left_hand_side
 	return function(chunk)
+		-- Changed to modifiable
+		---@diagnostic disable-next-line: redundant-parameter
+		vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
+
 		-- Delete the currently written response
 		local num_lines = #(vim.split(response, "\n", {}))
-		vim.cmd 'undojoin'
+		vim.api.nvim_buf_call(bufnr, vim.cmd.undojoin)
 		vim.api.nvim_buf_set_lines(bufnr, line_start, line_start + num_lines, false, {})
 
 		-- Update the line start to wherever the extmark is now
@@ -49,13 +60,17 @@ local function create_response_writer(opts)
 
 		-- Write out the latest
 		response = response .. chunk
-		local lines = vim.split(response, "\n", {})
-		vim.cmd 'undojoin'
+		local lines = vim.split(response .. right_hand_side, "\n", {})
+		vim.api.nvim_buf_call(bufnr, vim.cmd.undojoin)
 		vim.api.nvim_buf_set_lines(bufnr, line_start, line_start, false, lines)
 
+		-- Changed to unmodifiable
+		---@diagnostic disable-next-line: redundant-parameter
+		vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
+
 		-- Scroll
-		if scroll_win and #lines > 1 then
-			vim.api.nvim_win_call(scroll_win, function() vim.cmd "noau norm! zb" end)
+		if do_scroll and #lines > 1 then
+			vim.api.nvim_win_call(winnr, function() vim.cmd "noau norm! zb" end)
 		end
 	end
 end
@@ -80,7 +95,7 @@ M.setup = function(opts)
 end
 
 --[[
-Given a prompt, call chatGPT and stream back the results one chunk
+Given a prompt, call ChatGPT and stream back the results one chunk
 as a time as they are streamed back from OpenAI.
 @params opts.scroll_win win_id of the window if scroll
 
@@ -148,14 +163,17 @@ M.stream = function(prompt_or_messages, opts)
 		log:close()
 	end
 
-	local cb = opts.on_chunk
+	local bufnr = vim.api.nvim_get_current_buf()
+	local cb = opts.on_chunk or create_response_writer()
 	local on_exit = opts.on_exit
 	jobid = vim.fn.jobstart(command, {
 		stdout_buffered = false,
 		on_exit = function()
-			if on_exit then
-				on_exit()
-			end
+			-- Restore modifiable
+			---@diagnostic disable-next-line: redundant-parameter
+			vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
+
+			if on_exit then on_exit() end
 			jobid = nil
 		end,
 		on_stdout = function(_, data, _)
@@ -169,47 +187,13 @@ M.stream = function(prompt_or_messages, opts)
 					if not string.match(line, '%[DONE%]') then
 						local json = vim.fn.json_decode(line) or {}
 						local chunk = json.choices[1].delta.content
-
-						if chunk and cb then
+						if chunk then
 							cb(chunk)
 						end
 					end
 				end
 			end
 		end,
-	})
-end
-
---[[
-In visual mode given some selected text, ask the user how they
-would like it to be rewritten. Then rewrite it that way.
-]]
---
-M.replace = function()
-	local mode = vim.api.nvim_get_mode().mode
-	if mode ~= "v" and mode ~= "V" then
-		print("Please select some text")
-		return
-	end
-
-	local text = get_visual_selection()
-
-	local prompt = "Rewrite this text "
-	prompt = prompt .. vim.fn.input("[Prompt]: " .. prompt)
-	prompt = prompt .. ": \n\n" .. text .. "\n\nRewrite:"
-
-	send_keys("d")
-
-	if mode == 'V' then
-		send_keys("O")
-	end
-
-	M.stream(prompt, {
-		on_chunk = function(chunk)
-			chunk = vim.split(chunk, "\n", {})
-			vim.cmd 'undojoin'
-			vim.api.nvim_put(chunk, "c", mode == 'V', true)
-		end
 	})
 end
 
@@ -236,32 +220,9 @@ M.order = function(opts)
 	---@diagnostic disable-next-line: redundant-parameter
 	local filetype = vim.api.nvim_buf_get_option(0, 'filetype')
 
-	local function create_prompt(ft)
-		---@diagnostic disable-next-line: redundant-parameter
-		local commentstring = string.format(vim.api.nvim_buf_get_option(0, 'commentstring'),
-			' Written by ' .. model)
-		local source_name
-		if ft == 'lua' then
-			source_name = 'Lua'
-		elseif ft == 'rust' then
-			source_name = 'Rust'
-		elseif ft == 'c' then
-			source_name = 'C'
-		elseif ft == 'python' then
-			source_name = 'Python3'
-		else
-			return nil
-		end
-		return string.format(
-			"You are an excellent coding helper, returning %s source code that satisfies the user's input. The response is ONLY simplest source code. Your output is NOT markdown, BUT an executable source code. ALL explanations other than the excutable source code must be written in comments.\nThe first line is always a %s comment:\n%s",
-			source_name, source_name, commentstring)
-	end
+	local system_prompt_str =
+	"You are a coding helper, returning source code that satisfies the user's input. First the file type of the output is indicated in the bracket and then the command is given. Your output is an EXECUTABLE CODE ONLY. ALL explanations other than the excutable source code must be written in comments."
 
-	local system_prompt_str = create_prompt(filetype)
-	if not system_prompt_str then
-		vim.notify('This filetype is not supported.', vim.log.levels.INFO, notify_opts)
-		return
-	end
 	-- 命令の入力
 	local ok, order = pcall(vim.fn.input, 'Order: ')
 	if not ok or order == '' then
@@ -269,7 +230,25 @@ M.order = function(opts)
 	end
 	local messages = {
 		{ role = 'system', content = system_prompt_str },
-		{ role = 'user',   content = order .. "\n\nCode:" },
+		{
+			role = 'user',
+			content =
+			"[rust]API Web pour générer la date et l'heure d'accès en text/plain à l'aide d'actix_web"
+		},
+		{
+			role = 'assistant',
+			content =
+			"use actix_web::{HttpServer, App, Responder, web};\nuse chrono::Local;\n\nasync fn get_time(_req: web::HttpRequest) -> impl Responder {\n    format!(\"{}\", Local::now())\n}\n\n#[actix_web::main]\nasync fn main() -> std::io::Result<()> {\n    HttpServer::new(|| {\n        App::new().route(\"/\", web::get().to(get_time))\n    })\n    .bind(\"127.0.0.1:8080\")?\n    .run()\n    .await\n}"
+		},
+		{ role = 'user',   content = "[lua]Bubble sorting function with explanation" },
+		{
+			role = 'assistant',
+			content =
+			"-- Define the function bubbleSort\nfunction bubbleSort(arr)\n    local n = #arr\n    -- Loop through the array\n    for i = 1, n do\n        -- Loop through the array again for each previous element to i\n        for j = 1, n - i do\n            -- Check if elements need swapping\n            if arr[j] > arr[j + 1] then\n                -- Swap elements\n                arr[j], arr[j + 1] = arr[j + 1], arr[j]\n            end\n        end\n    end\n    -- Return the sorted array\n    return arr\nend",
+		},
+		{ role = 'user',      content = '[css]「隣の客はよく柿食う客だ」を英語に翻訳して' },
+		{ role = 'assistant', content = '/* The customer next to me is a frequent persimmon-eater. */' },
+		{ role = 'user',      content = string.format("[%s]%s", filetype, order) },
 	}
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	gpt_ordering_buffer = bufnr
@@ -281,8 +260,6 @@ M.order = function(opts)
 	vim.api.nvim_buf_set_option(bufnr, 'bufhidden', 'hide')
 	---@diagnostic disable-next-line: redundant-parameter
 	vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
-	---@diagnostic disable-next-line: redundant-parameter
-	vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
 
 
 	-- 現在のウィンドウとバッファを保存
@@ -294,6 +271,10 @@ M.order = function(opts)
 	local new_win = vim.api.nvim_get_current_win()
 	-- 新しいウィンドウにバッファを設定
 	vim.api.nvim_win_set_buf(new_win, bufnr)
+	-- Windowとbufferが適切な今writerを作成する
+	local writer = create_response_writer {
+		scroll = opts.scroll == nil or opts.scroll,
+	}
 	-- ウィンドウの設定
 	if setup_window then setup_window() end
 	-- 元のウィンドウに戻る
@@ -301,24 +282,53 @@ M.order = function(opts)
 	-- 元のバッファに戻る
 	vim.api.nvim_win_set_buf(current_win, current_buf)
 
-	local writer = create_response_writer {
-		line_no = 0,
-		bufnr = bufnr,
-		scroll_win = (opts.scroll == nil or opts.scroll) and new_win or nil,
-	}
 	require 'gpt'.stream(messages, {
-		on_chunk = function(chunk)
-			---@diagnostic disable-next-line: redundant-parameter
-			vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
-			writer(chunk)
+		on_chunk = writer,
+		on_exit = function()
 			---@diagnostic disable-next-line: redundant-parameter
 			vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
-		end,
-		on_exit = function()
+
 			vim.notify("Order fulfillment is complete.", vim.log.levels.INFO, notify_opts)
 		end,
 	})
 end
+
+--  Operatorfunc that follows the instructions to transform and replace text objects.
+function _G.gpt_replace_opfunc(type)
+	if not type or type == '' then
+		---@diagnostic disable-next-line: redundant-parameter
+		vim.api.nvim_set_option('operatorfunc', "v:lua.gpt_replace_opfunc")
+		return 'g@'
+	end
+
+	local message = vim.fn.input("Instruction: ")
+	if message == "" then return end
+
+	vim.api.nvim_feedkeys(
+		vim.api.nvim_replace_termcodes('<esc>', true, false, true),
+		'm', true
+	)
+	if type == "line" then
+		vim.cmd "norm! '[V']d"
+	else
+		vim.cmd "norm! `[v`]d"
+	end
+
+	message = string.format('%s:\n\n%s', message, vim.fn.getreg('"'))
+
+	require 'gpt'.stream {
+		-- Instruction
+		{
+			role = "system",
+			content =
+			"You are a flexible text conversion tool. Output only the resulting string",
+		},
+		-- Order
+		{ role = "user", content = message },
+	}
+end
+
+vim.keymap.set('', '<Plug>(gpt-replace)', _G.gpt_replace_opfunc, { expr = true })
 
 --[[
 Ask the user for a prompt and insert the response where the cursor
@@ -330,37 +340,7 @@ M.prompt = function()
 	if input == "" then return end
 
 	send_keys("<esc>")
-	M.stream(input, {
-		on_chunk = create_response_writer()
-	})
-end
-
---[[
-Take the current visual selection as the prompt to chatGPT.
-Insert the response one line below the current selection.
-]]
---
-M.visual_prompt = function()
-	local mode = vim.api.nvim_get_mode().mode
-	local text = get_visual_selection()
-
-	local prompt = ""
-	local input = vim.fn.input("[Prompt]: " .. prompt)
-
-	if input == "" then return end
-
-	prompt = prompt .. input
-	prompt = prompt .. "\n\n ===== \n\n" .. text .. "\n\n ===== \n\n"
-
-	send_keys("<esc>")
-
-	if mode == 'V' then send_keys("o<CR><esc>") end
-
-	M.stream(prompt, {
-		on_chunk = create_response_writer()
-	})
-
-	send_keys("<esc>")
+	M.stream(input)
 end
 
 --[[
