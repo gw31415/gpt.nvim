@@ -31,7 +31,7 @@ With your favorite package manager,
         vim.notify(string.format(
             'Successfully saved OPENAI_API_KEY at `%s`.', path),
           vim.log.levels.INFO, {
-            title = 'codexy.lua'
+            title = 'gpt.nvim'
           })
       end
       return key
