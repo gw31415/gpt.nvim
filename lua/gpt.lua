@@ -299,24 +299,34 @@ function _G.gpt_replace_opfunc(type)
 		---@diagnostic disable-next-line: redundant-parameter
 		vim.api.nvim_set_option('operatorfunc', "v:lua.gpt_replace_opfunc")
 		return 'g@'
+	elseif type == "block" then
+		vim.notify("Block selection is not supported.", vim.log.levels.ERROR, notify_opts)
+		return
 	end
 
 	local message = vim.fn.input("Instruction: ")
 	if message == "" then return end
 
+	-- Note the value of virtualedit
+	---@diagnostic disable-next-line: redundant-parameter
+	local ve = vim.api.nvim_get_option('ve')
+	---@diagnostic disable-next-line: redundant-parameter
+	vim.api.nvim_set_option('ve', 'onemore') -- To support deletion up to the end of the line.
+
+	if type == "line" then
+		vim.cmd "noau norm! '[V']c"
+	else
+		vim.cmd "noau norm! `[v`]d"
+	end
+	-- Change to normal-mode
 	vim.api.nvim_feedkeys(
 		vim.api.nvim_replace_termcodes('<esc>', true, false, true),
 		'm', true
 	)
-	if type == "line" then
-		vim.cmd "norm! '[V']d"
-	else
-		vim.cmd "norm! `[v`]d"
-	end
 
 	message = string.format('%s:\n\n%s', message, vim.fn.getreg('"'))
 
-	require 'gpt'.stream {
+	require 'gpt'.stream({
 		-- Instruction
 		{
 			role = "system",
@@ -325,7 +335,10 @@ function _G.gpt_replace_opfunc(type)
 		},
 		-- Order
 		{ role = "user", content = message },
-	}
+	}, {
+		---@diagnostic disable-next-line: redundant-parameter
+		on_exit = function() vim.api.nvim_set_option('ve', ve) end
+	})
 end
 
 vim.keymap.set('', '<Plug>(gpt-replace)', _G.gpt_replace_opfunc, { expr = true })
