@@ -262,24 +262,24 @@ M.order = function(opts)
 	vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
 
 
-	-- 現在のウィンドウとバッファを保存
+	-- Save the current window and buffer
 	local current_win = vim.api.nvim_get_current_win()
 	local current_buf = vim.api.nvim_get_current_buf()
-	-- vsplitを開く
+	-- Open a vsplit
 	vim.api.nvim_command(opener)
-	-- 新しいウィンドウを取得
+	-- Get the new window
 	local new_win = vim.api.nvim_get_current_win()
-	-- 新しいウィンドウにバッファを設定
+	-- Set the buffer to the new window
 	vim.api.nvim_win_set_buf(new_win, bufnr)
-	-- Windowとbufferが適切な今writerを作成する
+	-- Create a writer for the current window and buffer
 	local writer = create_response_writer {
 		scroll = opts.scroll == nil or opts.scroll,
 	}
-	-- ウィンドウの設定
+	-- Set up the window
 	if setup_window then setup_window() end
-	-- 元のウィンドウに戻る
+	-- Return to the original window
 	vim.api.nvim_set_current_win(current_win)
-	-- 元のバッファに戻る
+	-- Return to the original buffer
 	vim.api.nvim_win_set_buf(current_win, current_buf)
 
 	require 'gpt'.stream(messages, {
