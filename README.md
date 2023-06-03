@@ -17,7 +17,6 @@ With your favorite package manager,
   "gw31415/gpt.nvim",
   config = function()
     local function setup_authkey(path)
-      ---@diagnostic disable: param-type-mismatch
       path = vim.fn.expand(path, nil, nil)
       local key
       if vim.fn.filereadable(path) == 1 then
