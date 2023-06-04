@@ -59,7 +59,9 @@ With your favorite package manager,
 You can get an API key via the [OpenAI user settings page](https://platform.openai.com/account/api-keys)
 
 # Usage
+
 ## Stream
+
 `require 'gpt'.stream(messages)` to start output from ChatGPT at the cursor position.
 
 ## Prompt
@@ -67,12 +69,15 @@ You can get an API key via the [OpenAI user settings page](https://platform.open
 `require 'gpt'.prompt()` sends the prompt entered to the OpenAI ChatGPT API and receives an answer realtime.
 
 ## Replace
+
 `<Plug>(gpt-replace)` is an operator key to convert textobj
 
 ## Order
+
 `require 'gpt'.order()` receives questions about the current filetype and creates a window that answers them in real time.
 
 # Example
+
 Create commit message from diff --staged.
 
 ```lua
