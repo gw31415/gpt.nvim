@@ -9,6 +9,9 @@ local jobid = nil
 -- Model version
 local model
 
+-- Selection highlight-group
+local hlgroup
+
 -- opts of vim.notify
 local notify_opts = {
 	title = 'gpt.nvim'
@@ -86,6 +89,7 @@ M.setup = function(opts)
 		return
 	end
 	model = opts.model or "gpt-3.5-turbo"
+	hlgroup = opts.hlgroup or "Visual"
 
 	-- Make sure the share directory exists to log
 	local share_dir = vim.fn.stdpath 'data'
@@ -304,7 +308,36 @@ function _G.gpt_replace_opfunc(type)
 		return
 	end
 
+	-- Add highlights
+	local pos = {}
+	local _, line1, col1, _ = unpack(vim.fn.getpos("'["))
+	local _, line2, col2, _ = unpack(vim.fn.getpos("']"))
+	for line = line1, math.min(line2, vim.fn.line("w$")) do
+		if line ~= line1 and line ~= line2 then
+			---@diagnostic disable-next-line: param-type-mismatch
+			table.insert(pos, vim.fn.matchaddpos(hlgroup, { line }))
+		else
+			local str = vim.fn.getline(line)
+			local start_idx = line == line1 and col1 or 1
+			local end_idx = line == line2 and col2 or #str
+			for i = start_idx, end_idx do
+				---@diagnostic disable-next-line: param-type-mismatch
+				table.insert(pos, vim.fn.matchaddpos(hlgroup, { { line, vim.fn.byteidx(str, i) } }))
+			end
+		end
+	end
+	vim.cmd.redraw()
+
+	-- Reseive input
 	local message = vim.fn.input("Instruction: ")
+
+	-- Remove highlights
+	for _, id in pairs(pos) do
+		vim.fn.matchdelete(id)
+	end
+	vim.cmd.redraw()
+
+	-- Exit if no input
 	if message == "" then return end
 
 	-- Note the value of virtualedit
