@@ -59,6 +59,8 @@ With your favorite package manager,
 You can get an API key via the [OpenAI user settings page](https://platform.openai.com/account/api-keys)
 
 # Usage
+## Stream
+`require 'gpt'.stream(messages)` to start output from ChatGPT at the cursor position.
 
 ## Prompt
 
