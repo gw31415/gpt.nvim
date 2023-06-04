@@ -69,3 +69,18 @@ You can get an API key via the [OpenAI user settings page](https://platform.open
 
 ### Order
 `require 'gpt'.order()` receives questions about the current filetype and creates a window that answers them in real time.
+
+# Example
+Create commit message from diff --staged.
+
+```lua
+vim.api.nvim_create_autocmd('BufReadPost', {
+  pattern = "COMMIT_EDITMSG",
+  callback = function()
+    vim.keymap.set('n', '<C-g><tab>', function()
+      local diff = vim.fn.system({ 'git', '--git-dir', vim.fn.expand('%:p:h'), 'diff', '--staged' })
+      require 'gpt'.stream('Write a commit message describing the changes and the reasoning:\n\n========\n' .. diff)
+    end, { buffer = true })
+  end
+})
+```
