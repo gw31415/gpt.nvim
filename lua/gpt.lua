@@ -40,9 +40,9 @@ local function create_response_writer(opts)
 
 	local first_line      = vim.api.nvim_buf_get_lines(bufnr, line_start, line_start + 1, true)[1]
 	-- string found to the left of the cursor
-	local left_hand_side  = vim.fn.slice(first_line, 1, col - 1)
+	local left_hand_side  = vim.fn.slice(first_line, 0, col - 1)
 	-- string found to the right of the cursor
-	local right_hand_side = vim.fn.slice(first_line, col)
+	local right_hand_side = vim.fn.slice(first_line, col - 1)
 
 	vim.api.nvim_buf_set_lines(bufnr, line_start, line_start, true, {})
 
