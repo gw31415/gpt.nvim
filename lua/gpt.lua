@@ -88,7 +88,7 @@ M.setup = function(opts)
 		vim.notify("Please provide an OpenAI API key or its setup function.", vim.log.levels.WARN, notify_opts)
 		return
 	end
-	model = opts.model or "gpt-4-0613"
+	model = opts.model or "gpt-3.5-turbo-1106"
 	hlgroup = opts.hlgroup or "Visual"
 
 	-- Make sure the share directory exists to log
