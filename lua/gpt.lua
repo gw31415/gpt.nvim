@@ -30,7 +30,7 @@ local function create_response_writer(opts)
 	opts                  = opts or {}
 	local winnr           = vim.api.nvim_get_current_win()
 	local bufnr           = vim.api.nvim_get_current_buf()
-	local _, lnum, col, _ = unpack(vim.fn.getcharpos('.'))
+	local _, lnum, col, _ = unpack(vim.fn.getcharpos('.') or { 0, 0, 0, 0 })
 	-- zero-indexed lnum
 	local line_start      = lnum - 1
 	local do_scroll       = opts.scroll
@@ -88,7 +88,7 @@ M.setup = function(opts)
 		vim.notify("Please provide an OpenAI API key or its setup function.", vim.log.levels.WARN, notify_opts)
 		return
 	end
-	model = opts.model or "gpt-4-1106-preview"
+	model = opts.model or "gpt-4-0613"
 	hlgroup = opts.hlgroup or "Visual"
 
 	-- Make sure the share directory exists to log
@@ -250,9 +250,9 @@ M.order = function(opts)
 			content =
 			"-- Define the function bubbleSort\nfunction bubbleSort(arr)\n    local n = #arr\n    -- Loop through the array\n    for i = 1, n do\n        -- Loop through the array again for each previous element to i\n        for j = 1, n - i do\n            -- Check if elements need swapping\n            if arr[j] > arr[j + 1] then\n                -- Swap elements\n                arr[j], arr[j + 1] = arr[j + 1], arr[j]\n            end\n        end\n    end\n    -- Return the sorted array\n    return arr\nend",
 		},
-		{ role = 'user',      content = '[css]「隣の客はよく柿食う客だ」を英語に翻訳して' },
+		{ role = 'user', content = '[css]「隣の客はよく柿食う客だ」を英語に翻訳して' },
 		{ role = 'assistant', content = '/* The customer next to me is a frequent persimmon-eater. */' },
-		{ role = 'user',      content = string.format("[%s]%s", filetype, order) },
+		{ role = 'user', content = string.format("[%s]%s", filetype, order) },
 	}
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	gpt_ordering_buffer = bufnr
@@ -310,8 +310,8 @@ function _G.gpt_replace_opfunc(type)
 
 	-- Add highlights
 	local pos = {}
-	local _, line1, col1, _ = unpack(vim.fn.getpos("'["))
-	local _, line2, col2, _ = unpack(vim.fn.getpos("']"))
+	local _, line1, col1, _ = unpack(vim.fn.getpos("'[") or { 0, 0, 0, 0 })
+	local _, line2, col2, _ = unpack(vim.fn.getpos("']") or { 0, 0, 0, 0 })
 	for line = line1, math.min(line2, vim.fn.line("w$")) do
 		if line ~= line1 and line ~= line2 then
 			---@diagnostic disable-next-line: param-type-mismatch
