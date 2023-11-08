@@ -1,0 +1,8 @@
+{
+    "workspace.library": [
+        "/Users/ama/.cache/nvim/dein/repos/github.com/folke/neodev.nvim/types/nightly",
+        "/opt/homebrew/Cellar/neovim/HEAD-f1775da/share/nvim/runtime/lua",
+        "/Users/ama/Documents/gpt.nvim/lua",
+        "${3rd}/luv/library"
+    ]
+}
